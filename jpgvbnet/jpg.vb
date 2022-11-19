@@ -37,8 +37,6 @@ Public Class jpg
     Private ScanVector() As Byte
     Private findex As Long, flen As Long
 
-    Declare Function SetPixel Lib "gdi32.dll" (ByVal hdc As Integer, ByVal x As Integer, ByVal y As Integer, ByVal crColor As Integer) As Integer
-
     Private Sub Read(ByRef n1 As Byte, ByRef n2 As Byte)
 
         n1 = Zig1(ZigIndex)
