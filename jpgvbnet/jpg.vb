@@ -35,7 +35,7 @@ Public Class jpg
     Private Zig2(63) As Integer
     Private ZigIndex As Byte
     Private ScanVector() As Byte
-    Private findex As Long, flen As Long
+    Public findex As Long, flen As Long
 
     Private Sub Read(ByRef n1 As Byte, ByRef n2 As Byte)
 
