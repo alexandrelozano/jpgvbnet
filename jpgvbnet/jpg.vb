@@ -2,7 +2,7 @@
 
 Public Class jpg
 
-    Private Class JpegType           'some type definitions (for coherence)
+    Private Structure JpegType           'some type definitions (for coherence)
         Public Property Rows As Integer             'image height
         Public Property Cols As Integer             'image width
         Public Property SamplesY As Integer         'sampling ratios
@@ -14,13 +14,15 @@ Public Class jpg
         Public Property HuffACTableY As Integer
         Public Property HuffACTableCbCr As Integer
         Public Property NumComp As Integer          'number of components
-    End Class
+    End Structure
 
-    Private Class HuffmanEntry               'a type for huffman tables
+    Private Structure HuffmanEntry               'a type for huffman tables
         Public Property Index As Long
         Public Property Code As Integer
         Public Property Length As Integer
-    End Class
+    End Structure
+
+    Public bmp As Bitmap
 
     'a few global variables
     Private curByte As Integer, curBits As Integer, jfile As Integer
@@ -28,8 +30,8 @@ Public Class jpg
     Private Image As JpegType
 
     'All large arrays are now dynamic
-    Private HuffmanDC(,) As HuffmanEntry
-    Private HuffmanAC(,) As HuffmanEntry
+    Private HuffmanDC(1, 255) As HuffmanEntry
+    Private HuffmanAC(1, 255) As HuffmanEntry
     Private Dct(7, 7, 7, 7) As Integer
     Private Zig1(63) As Integer
     Private Zig2(63) As Integer
@@ -385,24 +387,6 @@ Public Class jpg
     End Function
 
     Public Function DoJPG(FName As String) As Bitmap
-
-        Dim bmp As Bitmap = Nothing
-
-        Image = New JpegType
-
-        HuffmanDC = New HuffmanEntry(1, 255) {}
-        For xx As Integer = 0 To 1
-            For yy As Integer = 0 To 255
-                HuffmanDC(xx, yy) = New HuffmanEntry
-            Next
-        Next
-
-        HuffmanAC = New HuffmanEntry(1, 255) {}
-        For xx As Integer = 0 To 1
-            For yy As Integer = 0 To 255
-                HuffmanAC(xx, yy) = New HuffmanEntry
-            Next
-        Next
 
         Dim r As Integer, g As Integer, b As Integer, X As Integer, Y As Integer
         Dim u As Integer, v As Integer, i As Integer, j As Integer, Restart As Long

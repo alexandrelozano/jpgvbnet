@@ -110,7 +110,7 @@ Partial Class FMain
         '
         'Timer1
         '
-        Me.Timer1.Interval = 200
+        Me.Timer1.Interval = 500
         '
         'FMain
         '
