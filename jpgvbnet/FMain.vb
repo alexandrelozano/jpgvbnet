@@ -1,4 +1,5 @@
 ﻿Imports System.Threading
+Imports Microsoft.VisualBasic.ApplicationServices
 
 Public Class FMain
 
@@ -30,18 +31,23 @@ Public Class FMain
                                bmp = jpg.DoJPG(OpenFileDialog1.FileName)
                                stopWatch.Stop()
                            End Sub)
+
             t.Start()
 
             While t.ThreadState() = ThreadState.Running
                 Application.DoEvents()
             End While
 
-            lblJPGMilliseconds.Text = stopWatch.ElapsedMilliseconds & " ms"
+            If t.ThreadState <> ThreadState.Aborted Then
 
-            PictureBox1.Image = bmp
-            PictureBox1.Refresh()
+                lblJPGMilliseconds.Text = stopWatch.ElapsedMilliseconds & " ms"
 
-            pgbJPGDecode.Value = pgbJPGDecode.Maximum
+                PictureBox1.Image = bmp
+                PictureBox1.Refresh()
+
+                pgbJPGDecode.Value = pgbJPGDecode.Maximum
+
+            End If
 
             MenuStrip1.Enabled = True
             Timer1.Enabled = False
@@ -53,11 +59,7 @@ Public Class FMain
 
     Private Sub ExitToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles ExitToolStripMenuItem.Click
 
-        If t IsNot Nothing AndAlso t.IsAlive Then
-            t.Abort()
-        End If
-
-        End
+        Me.Close()
 
     End Sub
 
@@ -73,6 +75,16 @@ Public Class FMain
 
         pgbJPGDecode.Maximum = jpg.flen
         pgbJPGDecode.Value = jpg.findex
+
+    End Sub
+
+    Private Sub FMain_Closed(sender As Object, e As EventArgs) Handles Me.Closed
+
+        If t IsNot Nothing AndAlso t.ThreadState = ThreadState.Running Then
+            t.Abort()
+        End If
+
+        Application.Exit()
 
     End Sub
 
