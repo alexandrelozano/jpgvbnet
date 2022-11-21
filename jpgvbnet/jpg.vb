@@ -388,99 +388,100 @@ Public Class jpg
 
     Public Function DoJPG(FName As String) As Bitmap
 
-        Dim r As Integer, g As Integer, b As Integer, X As Integer, Y As Integer
-        Dim u As Integer, v As Integer, i As Integer, j As Integer, Restart As Long
-        Dim t As Single, d As Integer, temp0 As Integer, temp1 As Long
-        Dim a As String
+        Try
+
+            jfile = FreeFile()
+
+            'The only place where the file is actually read
+            ScanVector = System.IO.File.ReadAllBytes(FName)
+            ReDim Preserve ScanVector(ScanVector.Length + 15)
+            findex = 0
+            flen = FileSystem.FileLen(FName)
+
+            If GetSOI() = 0 Then
+                MsgBox("This is not a valid JPEG/JFIF image.", vbCritical, "Error")
+                Exit Try
+            End If
+
+            Do While findex < flen
+                ProcesScan()    'more than one scan in file?
+            Loop
+
+        Catch ex As Exception
+
+            MsgBox("There was an error reading the file:" + vbCrLf + ex.Message + vbCrLf + ex.StackTrace, vbCritical, "Error")
+
+        End Try
+
+        Return bmp
+
+    End Function
+
+    Private Sub ProcesScan()
+
+        Dim r As Integer, g As Integer, b As Integer, Y As Integer
+        Dim i As Integer, j As Integer, Restart As Long
+        Dim d As Integer, temp0 As Integer, temp1 As Long
         Dim XPos As Integer, YPos As Integer, dcY As Integer, dcCb As Integer, dcCr As Integer
         Dim xindex As Integer, yindex As Integer, mcu As Integer
         Dim i2 As Integer, j2 As Integer, cb As Integer, cr As Integer
         Dim xj As Integer, yi As Integer
 
-        On Error GoTo DefaultError
-
-        Dim YVector1(7, 7) As Integer              '4 vectors for Y attribute
-        Dim YVector2(7, 7) As Integer              '(not all may be needed)
+        Dim YVector1(7, 7) As Integer               '4 vectors for Y attribute
+        Dim YVector2(7, 7) As Integer               '(not all may be needed)
         Dim YVector3(7, 7) As Integer
         Dim YVector4(7, 7) As Integer
-        Dim CbVector(7, 7) As Integer              '1 vector for Cb attribute
-        Dim CrVector(7, 7) As Integer              '1 vector for Cr attribute
-        Dim QuantTable(1, 7, 7) As Integer    '2 quantization tables (Y, CbCr)
+        Dim CbVector(7, 7) As Integer               '1 vector for Cb attribute
+        Dim CrVector(7, 7) As Integer               '1 vector for Cr attribute
+        Dim QuantTable(1, 7, 7) As Integer          '2 quantization tables (Y, CbCr)
 
-        For X = 0 To 7           'Initialize our cosine table (used for DCT)
-            For Y = 0 To 7
-                For u = 0 To 7
-                    For v = 0 To 7
-                        t = Math.Cos((2 * X + 1) * u * 0.1963495) * Math.Cos((2 * Y + 1) * v * 0.1963495)
-                        If u = 0 Then t = t * 0.707107
-                        If v = 0 Then t = t * 0.707107
-                        'Multiply by 16 to retain precision while staying integer
-                        Dct(X, Y, u, v) = t * 16
-                    Next v
-                Next u
-            Next Y
-        Next X
-
-        'store values for Zig-zag reordering
-        a = "00011020110203122130403122130405142332415060514233241506071625344352617071625344352617273645546372736455463747566574756657677677"
-        For i = 0 To 63
-            Zig1(i) = Val(Mid(a, i * 2 + 1, 1))
-            Zig2(i) = Val(Mid(a, i * 2 + 2, 1))
-        Next i
-        a = ""
-
-        jfile = FreeFile()
-
-        'The only place where the file is actually read
-        ScanVector = System.IO.File.ReadAllBytes(FName)
-        ReDim Preserve ScanVector(ScanVector.Length + 15)
-        findex = 0
-        flen = FileSystem.FileLen(FName)
-
-        If GetSOI() = 0 Then
-            MsgBox("This is not a valid JPEG/JFIF image.", vbCritical, "Error")
-            GoTo DefaultExit
-        End If
-
-StartOver:
-
-        QTables = 0                   'Initialize some checkpoint variables
+        QTables = 0     'Initialize some checkpoint variables
         ACTables = 0
         DCTables = 0
         Restart = 0
 
-        Do                                 'Search for markers
-            If GetByte() = 255 Then          'Marker Found
+        Do      'Search for markers
+            If GetByte() = 255 Then         'Marker Found
                 d = GetByte()
 
-                Select Case d              'which one is it?
-                    Case &HC0              'SOF0
-                        If GetImageAttr() = 0 Then MsgBox("Error getting Start Of Frame 0 Marker.", vbCritical, "Error") : GoTo DefaultExit
-                    Case &HC1              'SOF1
-                        If GetImageAttr() = 0 Then MsgBox("Error getting Start Of Frame 1 Marker.", vbCritical, "Error") : GoTo DefaultExit
-                    Case &HC9              'SOF9
-                        MsgBox("Arithmetic Coding Not Supported.", vbCritical, "Error") : GoTo DefaultExit
-                    Case &HC4              'DHT
-                        If ACTables < 2 Or DCTables < 2 Then
-                            If GetHuffTables() = 0 Then MsgBox("Error getting Huffman tables.", vbCritical, "Error") : GoTo DefaultExit
+                Select Case d               'which one is it?
+                    Case &HC0               'SOF0
+                        If GetImageAttr() = 0 Then
+                            Throw New Exception("Error getting Start Of Frame 0 Marker.")
                         End If
-                    Case &HCC              'DAC
-                        MsgBox("Arithmetic Coding Not Supported.", vbCritical, "Error") : GoTo DefaultExit
-                    Case &HDA              'SOS
-                        If GetSOS() = 0 Then MsgBox("Error getting SOS marker.", vbCritical, "Error") : GoTo DefaultExit
+                    Case &HC1               'SOF1
+                        If GetImageAttr() = 0 Then
+                            Throw New Exception("Error getting Start Of Frame 1 Marker.")
+                        End If
+                    Case &HC9               'SOF9
+                        Throw New Exception("Arithmetic Coding Not Supported.")
+                    Case &HC4               'DHT
+                        If ACTables < 2 Or DCTables < 2 Then
+                            If GetHuffTables() = 0 Then
+                                Throw New Exception("Error getting Huffman tables.")
+                            End If
+                        End If
+                    Case &HCC               'DAC
+                        Throw New Exception("Arithmetic Coding Not Supported.")
+                    Case &HDA               'SOS
+                        If GetSOS() = 0 Then
+                            Throw New Exception("Error getting SOS marker.")
+                        End If
                         If (DCTables = 2 And ACTables = 2 And QTables = 2) Or Image.NumComp = 1 Then
                             EOI = 0
-                            Exit Do        'Go on to secondary control loop
+                            Exit Do         'Go on to secondary control loop
                         Else
-                            MsgBox("Unexpected file format.", vbCritical, "Error") : GoTo DefaultExit
+                            Throw New Exception("Unexpected file format.")
                         End If
-                    Case &HDB              'DQT
+                    Case &HDB               'DQT
                         If QTables < 2 Then
-                            If GetQuantTables(QuantTable) = 0 Then MsgBox("Error getting quantization tables.", vbCritical, "Error") : GoTo DefaultExit
+                            If GetQuantTables(QuantTable) = 0 Then
+                                Throw New Exception("Error getting quantization tables.")
+                            End If
                         End If
-                    Case &HDD              'DRI
+                    Case &HDD               'DRI
                         Restart = GetWord()
-                    Case &HE0              'APP0
+                    Case &HE0               'APP0
                         temp1 = GetWord()    'Length of segment
                         findex = findex + 5
                         temp0 = GetByte()    'Major revision
@@ -504,209 +505,213 @@ StartOver:
         curBits = 7          'Start with the seventh bit
         curByte = GetByte()    'Of the first byte
 
-        If findex >= flen Then GoTo DefaultExit
-
-        'resize the given control to image's dimensions
-        bmp = New Bitmap(Image.Cols, Image.Rows)
-
-        Select Case Image.NumComp        'How many components does the image have?
-            Case 3                           '3 components (Y-Cb-Cr)
-                Select Case Image.SamplesY   'What's the sampling ratio of Y to CbCr?
-                    Case 4                       '4 pixels to 1
-                        Do                       'Process 16x16 blocks of pixels
-                            GetBlock(YVector1, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
-                            GetBlock(YVector2, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
-                            GetBlock(YVector3, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
-                            GetBlock(YVector4, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
-                            GetBlock(CbVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCb)
-                            GetBlock(CrVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCr)
-                            'YCbCr vectors have been obtained
-                            For i = 0 To 7           'Draw top left 8x8 pixels
-                                For j = 0 To 7
-                                    Y = YVector1(i, j)
-                                    i2 = i \ 2
-                                    j2 = j \ 2
-                                    cb = CbVector(i2, j2)
-                                    cr = CrVector(i2, j2)
-                                    ToRGB(Y, cb, cr, r, g, b)
-                                    xj = xindex + j
-                                    yi = yindex + i
-                                    If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
-                                Next j
-                            Next i
-                            For i = 0 To 7           'Draw top right 8x8 pixels
-                                For j = 8 To 15
-                                    Y = YVector2(i, j - 8)
-                                    i2 = i \ 2
-                                    j2 = j \ 2
-                                    cb = CbVector(i2, j2)
-                                    cr = CrVector(i2, j2)
-                                    ToRGB(Y, cb, cr, r, g, b)
-                                    xj = xindex + j
-                                    yi = yindex + i
-                                    If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
-                                Next j
-                            Next i
-                            For i = 8 To 15          'Draw bottom left 8x8 pixels
-                                For j = 0 To 7
-                                    Y = YVector3(i - 8, j)
-                                    i2 = i \ 2
-                                    j2 = j \ 2
-                                    cb = CbVector(i2, j2)
-                                    cr = CrVector(i2, j2)
-                                    ToRGB(Y, cb, cr, r, g, b)
-                                    xj = xindex + j
-                                    yi = yindex + i
-                                    If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
-                                Next j
-                            Next i
-                            For i = 8 To 15          'Draw bottom right 8x8 pixels
-                                For j = 8 To 15
-                                    Y = YVector4(i - 8, j - 8)
-                                    i2 = i \ 2
-                                    j2 = j \ 2
-                                    cb = CbVector(i2, j2)
-                                    cr = CrVector(i2, j2)
-                                    ToRGB(Y, cb, cr, r, g, b)
-                                    xj = xindex + j
-                                    yi = yindex + i
-                                    If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
-                                Next j
-                            Next i
-                            xindex = xindex + 16
-                            If xindex >= Image.Cols Then xindex = 0 : yindex = yindex + 16 : mcu = 1
-                            If mcu = 1 And Restart <> 0 Then 'Execute the restart interval
-                                curByte = GetByte()
-                                curByte = GetByte()
-                                curByte = GetByte()
-                                curBits = 7
-                                dcY = 0 : dcCb = 0 : dcCr = 0 : mcu = 0 'Reset the DC value
-                            End If
-                        Loop Until findex >= flen Or yindex >= Image.Rows
-                    Case 2           '2 pixels to 1
-                        Do
-                            GetBlock(YVector1, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
-                            GetBlock(YVector2, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
-                            GetBlock(CbVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCb)
-                            GetBlock(CrVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCr)
-                            'YCbCr vectors have been obtained
-                            For i = 0 To 7             'Draw left 8x8 pixels
-                                For j = 0 To 7
-                                    Y = YVector1(i, j)
-                                    j2 = j \ 2
-                                    cb = CbVector(i, j2)
-                                    cr = CrVector(i, j2)
-                                    ToRGB(Y, cb, cr, r, g, b)
-                                    xj = xindex + j
-                                    yi = yindex + i
-                                    If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
-                                Next j
-                            Next i
-                            For i = 0 To 7             'Draw right 8x8 pixels
-                                For j = 8 To 15
-                                    Y = YVector2(i, j - 8)
-                                    j2 = j \ 2
-                                    cb = CbVector(i, j2)
-                                    cr = CrVector(i, j2)
-                                    ToRGB(Y, cb, cr, r, g, b)
-                                    xj = xindex + j
-                                    yi = yindex + i
-                                    If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
-                                Next j
-                            Next i
-                            xindex = xindex + 16
-                            If xindex >= Image.Cols Then xindex = 0 : yindex = yindex + 8 : mcu = 1
-                            If mcu = 1 And Restart <> 0 Then 'execute the restart interval
-                                curByte = GetByte()
-                                curByte = GetByte()
-                                curByte = GetByte()
-                                curBits = 7
-                                dcY = 0 : dcCb = 0 : dcCr = 0 : mcu = 0
-                            End If
-                        Loop Until findex >= flen Or yindex >= Image.Rows
-                    Case 1        '1 pixel to 1
-                        Do
-                            GetBlock(YVector1, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
-                            GetBlock(CbVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCb)
-                            GetBlock(CrVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCr)
-                            'YCbCr vectors have been obtained
-                            For i = 0 To 7            'Draw 8x8 pixels
-                                For j = 0 To 7
-                                    Y = YVector1(i, j)
-                                    i2 = i \ 2
-                                    j2 = j \ 2
-                                    cb = CbVector(i2, j2)
-                                    cr = CrVector(i2, j2)
-                                    ToRGB(Y, cb, cr, r, g, b)
-                                    xj = xindex + j
-                                    yi = yindex + i
-                                    If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
-                                Next j
-                            Next i
-                            xindex = xindex + 8
-                            If xindex >= Image.Cols Then xindex = 0 : yindex = yindex + 8 : mcu = 1
-                            If mcu = 1 And Restart <> 0 Then 'execute the restart interval
-                                curByte = GetByte()
-                                curByte = GetByte()
-                                curByte = GetByte()
-                                curBits = 7
-                                dcY = 0 : dcCb = 0 : dcCr = 0 : mcu = 0
-                            End If
-                        Loop Until findex >= flen Or yindex >= Image.Rows
-                End Select 'Ratio
-            Case 1
-                Do
-                    GetBlock(YVector1, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
-                    'Y vector has been obtained
-                    For i = 0 To 7           'Draw 8x8 pixels
-                        For j = 0 To 7
-                            Y = YVector1(i, j)
-                            If Y < 0 Then Y = 0
-                            If Y > 255 Then Y = 255
-                            xj = xindex + j : yi = yindex + i
-                            If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(Y, Y, Y))
-                        Next j
-                    Next i
-                    xindex = xindex + 8
-                    If xindex >= Image.Cols Then xindex = 0 : yindex = yindex + 8 : mcu = 1
-                    If mcu = 1 And Restart <> 0 Then 'execute the restart interval
-                        curByte = GetByte()
-                        curByte = GetByte()
-                        curByte = GetByte()
-                        curBits = 7
-                        dcY = 0 : mcu = 0
-                    End If
-                Loop Until findex >= flen Or yindex >= Image.Rows
-        End Select 'Components
-
         If findex < flen Then
-            'If MsgBox("File appears to contain another scan. Continue processing?", vbYesNo, "Question") = vbYes Then
-            GoTo StartOver    'more than one scan in file?
-            'End If
+
+            'resize the given control to image's dimensions
+            bmp = New Bitmap(Image.Cols, Image.Rows)
+
+            Select Case Image.NumComp        'How many components does the image have?
+                Case 3                           '3 components (Y-Cb-Cr)
+                    Select Case Image.SamplesY   'What's the sampling ratio of Y to CbCr?
+                        Case 4                       '4 pixels to 1
+                            Do                       'Process 16x16 blocks of pixels
+                                GetBlock(YVector1, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
+                                GetBlock(YVector2, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
+                                GetBlock(YVector3, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
+                                GetBlock(YVector4, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
+                                GetBlock(CbVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCb)
+                                GetBlock(CrVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCr)
+                                'YCbCr vectors have been obtained
+                                For i = 0 To 7           'Draw top left 8x8 pixels
+                                    For j = 0 To 7
+                                        Y = YVector1(i, j)
+                                        i2 = i \ 2
+                                        j2 = j \ 2
+                                        cb = CbVector(i2, j2)
+                                        cr = CrVector(i2, j2)
+                                        ToRGB(Y, cb, cr, r, g, b)
+                                        xj = xindex + j
+                                        yi = yindex + i
+                                        If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
+                                    Next j
+                                Next i
+                                For i = 0 To 7           'Draw top right 8x8 pixels
+                                    For j = 8 To 15
+                                        Y = YVector2(i, j - 8)
+                                        i2 = i \ 2
+                                        j2 = j \ 2
+                                        cb = CbVector(i2, j2)
+                                        cr = CrVector(i2, j2)
+                                        ToRGB(Y, cb, cr, r, g, b)
+                                        xj = xindex + j
+                                        yi = yindex + i
+                                        If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
+                                    Next j
+                                Next i
+                                For i = 8 To 15          'Draw bottom left 8x8 pixels
+                                    For j = 0 To 7
+                                        Y = YVector3(i - 8, j)
+                                        i2 = i \ 2
+                                        j2 = j \ 2
+                                        cb = CbVector(i2, j2)
+                                        cr = CrVector(i2, j2)
+                                        ToRGB(Y, cb, cr, r, g, b)
+                                        xj = xindex + j
+                                        yi = yindex + i
+                                        If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
+                                    Next j
+                                Next i
+                                For i = 8 To 15          'Draw bottom right 8x8 pixels
+                                    For j = 8 To 15
+                                        Y = YVector4(i - 8, j - 8)
+                                        i2 = i \ 2
+                                        j2 = j \ 2
+                                        cb = CbVector(i2, j2)
+                                        cr = CrVector(i2, j2)
+                                        ToRGB(Y, cb, cr, r, g, b)
+                                        xj = xindex + j
+                                        yi = yindex + i
+                                        If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
+                                    Next j
+                                Next i
+                                xindex = xindex + 16
+                                If xindex >= Image.Cols Then xindex = 0 : yindex = yindex + 16 : mcu = 1
+                                If mcu = 1 And Restart <> 0 Then 'Execute the restart interval
+                                    curByte = GetByte()
+                                    curByte = GetByte()
+                                    curByte = GetByte()
+                                    curBits = 7
+                                    dcY = 0 : dcCb = 0 : dcCr = 0 : mcu = 0 'Reset the DC value
+                                End If
+                            Loop Until findex >= flen Or yindex >= Image.Rows
+                        Case 2           '2 pixels to 1
+                            Do
+                                GetBlock(YVector1, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
+                                GetBlock(YVector2, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
+                                GetBlock(CbVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCb)
+                                GetBlock(CrVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCr)
+                                'YCbCr vectors have been obtained
+                                For i = 0 To 7             'Draw left 8x8 pixels
+                                    For j = 0 To 7
+                                        Y = YVector1(i, j)
+                                        j2 = j \ 2
+                                        cb = CbVector(i, j2)
+                                        cr = CrVector(i, j2)
+                                        ToRGB(Y, cb, cr, r, g, b)
+                                        xj = xindex + j
+                                        yi = yindex + i
+                                        If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
+                                    Next j
+                                Next i
+                                For i = 0 To 7             'Draw right 8x8 pixels
+                                    For j = 8 To 15
+                                        Y = YVector2(i, j - 8)
+                                        j2 = j \ 2
+                                        cb = CbVector(i, j2)
+                                        cr = CrVector(i, j2)
+                                        ToRGB(Y, cb, cr, r, g, b)
+                                        xj = xindex + j
+                                        yi = yindex + i
+                                        If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
+                                    Next j
+                                Next i
+                                xindex = xindex + 16
+                                If xindex >= Image.Cols Then xindex = 0 : yindex = yindex + 8 : mcu = 1
+                                If mcu = 1 And Restart <> 0 Then 'execute the restart interval
+                                    curByte = GetByte()
+                                    curByte = GetByte()
+                                    curByte = GetByte()
+                                    curBits = 7
+                                    dcY = 0 : dcCb = 0 : dcCr = 0 : mcu = 0
+                                End If
+                            Loop Until findex >= flen Or yindex >= Image.Rows
+                        Case 1        '1 pixel to 1
+                            Do
+                                GetBlock(YVector1, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
+                                GetBlock(CbVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCb)
+                                GetBlock(CrVector, HuffmanDC, Image.HuffDCTableCbCr, HuffmanAC, Image.HuffACTableCbCr, QuantTable, Image.QuantTableCbCr, dcCr)
+                                'YCbCr vectors have been obtained
+                                For i = 0 To 7            'Draw 8x8 pixels
+                                    For j = 0 To 7
+                                        Y = YVector1(i, j)
+                                        i2 = i \ 2
+                                        j2 = j \ 2
+                                        cb = CbVector(i2, j2)
+                                        cr = CrVector(i2, j2)
+                                        ToRGB(Y, cb, cr, r, g, b)
+                                        xj = xindex + j
+                                        yi = yindex + i
+                                        If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(r, g, b))
+                                    Next j
+                                Next i
+                                xindex = xindex + 8
+                                If xindex >= Image.Cols Then xindex = 0 : yindex = yindex + 8 : mcu = 1
+                                If mcu = 1 And Restart <> 0 Then 'execute the restart interval
+                                    curByte = GetByte()
+                                    curByte = GetByte()
+                                    curByte = GetByte()
+                                    curBits = 7
+                                    dcY = 0 : dcCb = 0 : dcCr = 0 : mcu = 0
+                                End If
+                            Loop Until findex >= flen Or yindex >= Image.Rows
+                    End Select 'Ratio
+                Case 1
+                    Do
+                        GetBlock(YVector1, HuffmanDC, Image.HuffDCTableY, HuffmanAC, Image.HuffACTableY, QuantTable, Image.QuantTableY, dcY)
+                        'Y vector has been obtained
+                        For i = 0 To 7           'Draw 8x8 pixels
+                            For j = 0 To 7
+                                Y = YVector1(i, j)
+                                If Y < 0 Then Y = 0
+                                If Y > 255 Then Y = 255
+                                xj = xindex + j : yi = yindex + i
+                                If xj < Image.Cols And yi < Image.Rows Then bmp.SetPixel(xj, yi, Color.FromArgb(Y, Y, Y))
+                            Next j
+                        Next i
+                        xindex = xindex + 8
+                        If xindex >= Image.Cols Then xindex = 0 : yindex = yindex + 8 : mcu = 1
+                        If mcu = 1 And Restart <> 0 Then 'execute the restart interval
+                            curByte = GetByte()
+                            curByte = GetByte()
+                            curByte = GetByte()
+                            curBits = 7
+                            dcY = 0 : mcu = 0
+                        End If
+                    Loop Until findex >= flen Or yindex >= Image.Rows
+            End Select 'Components
+
         End If
 
-DefaultExit:
-        Erase ScanVector
-        Erase YVector1
-        Erase YVector2
-        Erase YVector3
-        Erase YVector4
-        Erase CbVector
-        Erase CrVector
-        Erase QuantTable
-        Erase HuffmanDC
-        Erase HuffmanAC
-        Erase Dct
+    End Sub
 
-        Return bmp
+    Public Sub New()
 
-        Exit Function
+        Dim a As String
+        Dim t As Single
 
-DefaultError:
-        MsgBox("There was an error reading the file:" + vbCrLf + Err.Description + vbCrLf + Err.Erl.ToString, vbCritical, "Error")
-        Resume DefaultExit
+        For X = 0 To 7           'Initialize our cosine table (used for DCT)
+            For Y = 0 To 7
+                For u = 0 To 7
+                    For v = 0 To 7
+                        t = Math.Cos((2 * X + 1) * u * 0.1963495) * Math.Cos((2 * Y + 1) * v * 0.1963495)
+                        If u = 0 Then t = t * 0.707107
+                        If v = 0 Then t = t * 0.707107
+                        'Multiply by 16 to retain precision while staying integer
+                        Dct(X, Y, u, v) = t * 16
+                    Next v
+                Next u
+            Next Y
+        Next X
 
-    End Function
+        'store values for Zig-zag reordering
+        a = "00011020110203122130403122130405142332415060514233241506071625344352617071625344352617273645546372736455463747566574756657677677"
+        For i = 0 To 63
+            Zig1(i) = Val(Mid(a, i * 2 + 1, 1))
+            Zig2(i) = Val(Mid(a, i * 2 + 2, 1))
+        Next i
+        a = ""
+
+    End Sub
 
     Private Function ReceiveBits(cat As Byte) As Integer
 
